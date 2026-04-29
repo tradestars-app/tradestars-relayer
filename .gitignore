@@ -1,0 +1,25 @@
+node_modules
+
+# Next.js / build output
+.next
+out
+dist
+build
+*.tsbuildinfo
+
+# Local environment / secrets
+.env
+.env.*
+!.env.example
+
+# Local tooling
+.vercel
+.swc
+coverage
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
