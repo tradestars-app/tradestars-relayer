@@ -29,7 +29,6 @@ function getOfframpConfig(): P2POfframpConfig {
   const config = getP2PWithdrawalWorkflowConfig();
   return {
     baseRpcUrl: config.baseRpcUrl,
-    chainId: config.chainId,
     integratorAddress: config.integratorAddress,
     diamondAddress: config.diamondAddress,
     relayerPrivateKey: config.relayerPrivateKey,

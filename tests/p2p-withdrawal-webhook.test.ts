@@ -1,6 +1,5 @@
 import crypto from "crypto";
 import bs58 from "bs58";
-import { PublicKey } from "@solana/web3.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   encodeWithdrawRequestedEventForTest,
@@ -13,7 +12,7 @@ vi.mock("workflow/api", () => ({
   start: vi.fn(),
 }));
 
-const user = new PublicKey("5J7a1Qf7kbbfCkyw8vZczvCN4F7w4KPgsLo2w74H5hWQ");
+const user = "5J7a1Qf7kbbfCkyw8vZczvCN4F7w4KPgsLo2w74H5hWQ";
 
 function createSignature() {
   return bs58.encode(Buffer.alloc(64, 7));
@@ -35,7 +34,7 @@ function createPayload() {
                 logMessages: [
                   "Program log: Instruction: WithdrawRequest",
                   `Program data: ${encodeWithdrawRequestedEventForTest({
-                    user: user.toBase58(),
+                    user,
                     amount: 25_000_000n,
                     nonce: 3n,
                     remainingTotalBalance: 100_000_000n,
@@ -74,7 +73,7 @@ describe("p2p withdrawal webhook helpers", () => {
 
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
-      user: user.toBase58(),
+      user,
       amount: "25000000",
       nonce: "3",
       remainingTotalBalance: "100000000",

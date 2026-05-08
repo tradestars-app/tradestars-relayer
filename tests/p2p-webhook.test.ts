@@ -67,7 +67,7 @@ describe("p2p webhook helpers", () => {
   beforeEach(() => {
     process.env.ALCHEMY_P2P_WEBHOOK_SIGNING_KEY = "alchemy-secret";
     process.env.ALCHEMY_P2P_DEPOSIT_TOPIC0 = `0x${"ab".repeat(32)}`;
-    process.env.BASE_P2P_DEPOSIT_CONTRACT_ADDRESS = "0xabc123";
+    process.env.BASE_P2P_INTEGRATOR_ADDRESS = "0xabc123";
     vi.clearAllMocks();
   });
 
@@ -96,7 +96,7 @@ describe("p2p webhook helpers", () => {
     const decoded = decodeDepositLog(
       payload.event.data.block.logs[0],
       process.env.ALCHEMY_P2P_DEPOSIT_TOPIC0!,
-      process.env.BASE_P2P_DEPOSIT_CONTRACT_ADDRESS,
+      process.env.BASE_P2P_INTEGRATOR_ADDRESS,
     );
 
     expect(decoded).not.toBeNull();
@@ -115,7 +115,7 @@ describe("POST /api/webhooks/p2p", () => {
   beforeEach(() => {
     process.env.ALCHEMY_P2P_WEBHOOK_SIGNING_KEY = "alchemy-secret";
     process.env.ALCHEMY_P2P_DEPOSIT_TOPIC0 = `0x${"ab".repeat(32)}`;
-    process.env.BASE_P2P_DEPOSIT_CONTRACT_ADDRESS = "0xabc123";
+    process.env.BASE_P2P_INTEGRATOR_ADDRESS = "0xabc123";
     vi.clearAllMocks();
   });
 

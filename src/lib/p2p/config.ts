@@ -10,8 +10,10 @@ export function getP2PWebhookConfig() {
       "ALCHEMY_P2P_DEPOSIT_TOPIC0",
       process.env.ALCHEMY_P2P_DEPOSIT_TOPIC0,
     ).toLowerCase(),
-    depositContractAddress:
-      process.env.BASE_P2P_DEPOSIT_CONTRACT_ADDRESS?.toLowerCase() || null,
+    depositContractAddress: requireEnv(
+      "BASE_P2P_INTEGRATOR_ADDRESS",
+      process.env.BASE_P2P_INTEGRATOR_ADDRESS,
+    ).toLowerCase(),
   };
 }
 
@@ -39,7 +41,6 @@ export function getP2PDepositWorkflowConfig() {
 export function getP2PWithdrawalWorkflowConfig() {
   return {
     baseRpcUrl: requireEnv("BASE_RPC_URL", process.env.BASE_RPC_URL),
-    chainId: Number(process.env.BASE_CHAIN_ID || "84532"),
     integratorAddress: requireEnv(
       "BASE_P2P_INTEGRATOR_ADDRESS",
       process.env.BASE_P2P_INTEGRATOR_ADDRESS,

@@ -1,5 +1,4 @@
 import bs58 from "bs58";
-import { PublicKey } from "@solana/web3.js";
 
 const WITHDRAW_REQUESTED_DISCRIMINATOR = Buffer.from([
   114, 16, 240, 206, 93, 128, 151, 39,
@@ -128,10 +127,9 @@ function decodeWithdrawRequestedEvent(
     return null;
   }
 
-  const user = new PublicKey(data.subarray(8, 40));
   return {
     signature,
-    user: user.toBase58(),
+    user: bs58.encode(data.subarray(8, 40)),
     amount: data.readBigUInt64LE(40).toString(),
     nonce: data.readBigUInt64LE(48).toString(),
     remainingTotalBalance: data.readBigUInt64LE(56).toString(),
@@ -150,7 +148,11 @@ export function encodeWithdrawRequestedEventForTest(params: {
 }): string {
   const data = Buffer.alloc(WITHDRAW_REQUESTED_EVENT_LENGTH);
   WITHDRAW_REQUESTED_DISCRIMINATOR.copy(data, 0);
-  new PublicKey(params.user).toBuffer().copy(data, 8);
+  const userBytes = bs58.decode(params.user);
+  if (userBytes.length !== 32) {
+    throw new Error("Invalid Solana public key");
+  }
+  Buffer.from(userBytes).copy(data, 8);
   data.writeBigUInt64LE(params.amount, 40);
   data.writeBigUInt64LE(params.nonce, 48);
   data.writeBigUInt64LE(params.remainingTotalBalance, 56);

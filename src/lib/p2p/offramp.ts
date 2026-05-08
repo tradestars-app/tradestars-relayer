@@ -15,7 +15,6 @@ import {
   encryptPaymentAddress,
   type RelayIdentity,
 } from "@p2pdotme/sdk/orders";
-import { PublicKey } from "@solana/web3.js";
 
 const ORDER_TUPLE = {
   name: "",
@@ -133,7 +132,6 @@ export const P2P_ORDER_STATUS = {
 
 export type P2POfframpConfig = {
   baseRpcUrl: string;
-  chainId: number;
   integratorAddress: Address;
   diamondAddress: Address;
   relayerPrivateKey: `0x${string}`;
@@ -147,24 +145,25 @@ type P2POrder = {
   pubkey: string;
 };
 
-function getChain(chainId: number) {
-  return defineChain({
-    id: chainId,
-    name: chainId === 84532 ? "Base Sepolia" : "Base",
-    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-    rpcUrls: {
-      default: { http: [] },
-    },
-  });
-}
+const BASE_SEPOLIA_CHAIN = defineChain({
+  id: 84532,
+  name: "Base Sepolia",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: {
+    default: { http: [] },
+  },
+});
 
 function getClients(config: P2POfframpConfig) {
-  const chain = getChain(config.chainId);
   const transport = http(config.baseRpcUrl);
   const account = privateKeyToAccount(config.relayerPrivateKey);
   return {
-    publicClient: createPublicClient({ chain, transport }),
-    walletClient: createWalletClient({ account, chain, transport }),
+    publicClient: createPublicClient({ chain: BASE_SEPOLIA_CHAIN, transport }),
+    walletClient: createWalletClient({
+      account,
+      chain: BASE_SEPOLIA_CHAIN,
+      transport,
+    }),
     account,
   };
 }
@@ -175,7 +174,11 @@ export function solanaSignatureToBurnBytes32(signature: string): `0x${string}` {
 }
 
 export function solanaPubkeyToBytes32(pubkey: string): `0x${string}` {
-  return `0x${Buffer.from(new PublicKey(pubkey).toBytes()).toString("hex")}`;
+  const bytes = bs58.decode(pubkey);
+  if (bytes.length !== 32) {
+    throw new Error("Invalid Solana public key");
+  }
+  return `0x${Buffer.from(bytes).toString("hex")}`;
 }
 
 export async function getOrderIdForBurn(params: {
