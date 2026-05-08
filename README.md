@@ -1,10 +1,10 @@
 # TradeStars Relayer
 
-`tradestars-relayer` is the operational service that mirrors Base USDC deposits into Solana `tUSDC`.
+`tradestars-relayer` is the operational service that mirrors Base USDC deposits into Solana `tUSDC` and turns Solana withdrawal burns into P2P cashout orders.
 
 It is intentionally separate from the main product app. The relayer owns deposit execution and minting secrets; the product app only reads relayer status through an authenticated admin API.
 
-## Flow
+## Deposit Flow
 
 1. Alchemy sends Base `DepositComplete` logs to `POST /api/webhooks/p2p`.
 2. The route verifies `X-Alchemy-Signature`.
@@ -14,6 +14,16 @@ It is intentionally separate from the main product app. The relayer owns deposit
 6. The relayer calls Solana `deposit_collateral(amount, base_tx_hash, log_index)`.
 7. The Solana program creates the replay marker and mints `tUSDC`.
 
+## P2P Withdrawal Flow
+
+1. The product app records the user's encrypted payout details in the shared app store.
+2. The user signs the Solana `withdraw_request` transaction.
+3. The Solana program burns `tUSDC` and emits `WithdrawRequested`.
+4. Alchemy sends Solana logs to `POST /api/webhooks/p2p-withdrawals`.
+5. The relayer verifies `X-Alchemy-Signature`, decodes the Anchor event, and starts a Workflow run.
+6. The workflow reads the matching app withdrawal record by signature or `(wallet, nonce)`.
+7. The workflow calls `placeSellOrderForBurn`, waits for merchant acceptance, encrypts the user's payout details for the merchant, calls `deliverOfframpUpi`, and reconciles terminal Base statuses.
+
 ## Security Model
 
 - Alchemy webhooks are authenticated with HMAC.
@@ -22,6 +32,8 @@ It is intentionally separate from the main product app. The relayer owns deposit
 - Only the configured Solana `minting_authority` can call `deposit_collateral`.
 - Solana replay markers keyed by `(base_tx_hash, log_index)` prevent duplicate minting.
 - Operation logs are for support and observability only, not correctness.
+- The off-ramp relayer key stays in this service; the product app never receives it and does not expose off-ramp execution APIs.
+- P2P payout addresses are encrypted at rest in the app store and decrypted only by the relayer when a matching burn event is observed.
 
 ## Admin API
 
@@ -39,13 +51,25 @@ Auth:
 - `ALCHEMY_P2P_DEPOSIT_TOPIC0`
 - `BASE_P2P_DEPOSIT_CONTRACT_ADDRESS`
 - `BASE_RPC_URL`
+- `BASE_CHAIN_ID` optional, defaults to `84532`
+- `BASE_P2P_INTEGRATOR_ADDRESS`
+- `BASE_P2P_DIAMOND_ADDRESS`
+- `BASE_OFFRAMP_RELAYER_PRIVATE_KEY`
 - `BASE_SAFE_RECHECK_DELAYS_SECONDS` optional, defaults to `15,30,60,120`
+- `ALCHEMY_SOLANA_WITHDRAWAL_WEBHOOK_SIGNING_KEY`
+- `P2P_WITHDRAWAL_ENCRYPTION_KEY`
+- `P2P_OFFRAMP_RELAY_ADDRESS`
+- `P2P_OFFRAMP_RELAY_PUBLIC_KEY`
+- `P2P_OFFRAMP_RELAY_PRIVATE_KEY`
+- `P2P_OFFRAMP_MERCHANT_POLL_DELAYS_SECONDS` optional
+- `P2P_OFFRAMP_TERMINAL_POLL_DELAYS_SECONDS` optional
 - `SOLANA_MINTING_AUTHORITY_KEYPAIR`
 - `SOLANA_RPC`
 - `NEXT_PUBLIC_PROGRAM_ID`
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
 - `TRADESTARS_REDIS_KEY_PREFIX` optional, defaults to `ts-relayer` in production
+- `TRADESTARS_APP_STORE_NAMESPACE` optional, defaults to `ts-app` in production and `ts-app-dev` otherwise
 - `RELAYER_ADMIN_API_KEY`
 
 ## Commands
