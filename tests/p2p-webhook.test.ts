@@ -54,6 +54,28 @@ function createPayload(user: PublicKey) {
   };
 }
 
+function createPayloadWithoutLogAddress(user: PublicKey) {
+  const payload = createPayload(user);
+  const log = payload.event.data.block.logs[0];
+  return {
+    ...payload,
+    event: {
+      data: {
+        block: {
+          logs: [
+            {
+              transaction: log.transaction,
+              topics: log.topics,
+              data: log.data,
+              index: log.index,
+            },
+          ],
+        },
+      },
+    },
+  };
+}
+
 function signBody(body: string): string {
   return crypto
     .createHmac("sha256", process.env.ALCHEMY_P2P_WEBHOOK_SIGNING_KEY!)
@@ -105,6 +127,20 @@ describe("p2p webhook helpers", () => {
     expect(decoded?.amount).toBe(10_000_000n);
     expect(decoded?.logIndex).toBe(7);
   });
+
+  it("decodes matching deposit logs when Alchemy omits log address", () => {
+    const payload = createPayloadWithoutLogAddress(user);
+    const decoded = decodeDepositLog(
+      payload.event.data.block.logs[0],
+      process.env.ALCHEMY_P2P_DEPOSIT_TOPIC0!,
+      process.env.BASE_P2P_INTEGRATOR_ADDRESS,
+    );
+
+    expect(decoded).not.toBeNull();
+    expect(decoded?.orderId).toBe("42");
+    expect(decoded?.user.toBase58()).toBe(user.toBase58());
+    expect(decoded?.amount).toBe(10_000_000n);
+  });
 });
 
 describe("POST /api/webhooks/p2p", () => {
@@ -140,6 +176,31 @@ describe("POST /api/webhooks/p2p", () => {
   it("schedules a valid deposit workflow exactly once", async () => {
     const body = JSON.stringify(createPayload(user));
     mockedStart.mockResolvedValueOnce({ id: "run_123" } as never);
+
+    const response = await POST(
+      new Request("http://localhost/api/webhooks/p2p", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-alchemy-signature": signBody(body),
+        },
+        body,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockedStart).toHaveBeenCalledTimes(1);
+    expect(mockedUpsert).toHaveBeenCalledTimes(2);
+    expect(await response.json()).toEqual({
+      scheduled: 1,
+      ignored: 0,
+      failed: 0,
+    });
+  });
+
+  it("schedules a deposit workflow when the webhook log address is omitted", async () => {
+    const body = JSON.stringify(createPayloadWithoutLogAddress(user));
+    mockedStart.mockResolvedValueOnce({ id: "run_456" } as never);
 
     const response = await POST(
       new Request("http://localhost/api/webhooks/p2p", {

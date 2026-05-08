@@ -99,7 +99,8 @@ export function decodeDepositLog(
 
   if (
     expectedContractAddress &&
-    log.address?.toLowerCase() !== expectedContractAddress
+    log.address &&
+    log.address.toLowerCase() !== expectedContractAddress
   ) {
     return null;
   }
