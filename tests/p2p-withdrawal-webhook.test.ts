@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import bs58 from "bs58";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -18,53 +17,35 @@ function createSignature() {
   return bs58.encode(Buffer.alloc(64, 7));
 }
 
-function createPayload() {
-  return {
-    webhookId: "wh_solana",
-    id: "whevt_withdrawal",
-    event: {
-      data: {
-        block: {
-          transactions: [
-            {
-              transaction: {
-                signatures: [createSignature()],
-              },
-              meta: {
-                logMessages: [
-                  "Program log: Instruction: WithdrawRequest",
-                  `Program data: ${encodeWithdrawRequestedEventForTest({
-                    user,
-                    amount: 25_000_000n,
-                    nonce: 3n,
-                    remainingTotalBalance: 100_000_000n,
-                    availableToWithdraw: 75_000_000n,
-                    timestamp: 1_778_200_000n,
-                  })}`,
-                ],
-              },
-            },
-          ],
-        },
-      },
-    },
-  };
+function createWithdrawLogs() {
+  return [
+    "Program log: Instruction: WithdrawRequest",
+    `Program data: ${encodeWithdrawRequestedEventForTest({
+      user,
+      amount: 25_000_000n,
+      nonce: 3n,
+      remainingTotalBalance: 100_000_000n,
+      availableToWithdraw: 75_000_000n,
+      timestamp: 1_778_200_000n,
+    })}`,
+  ];
 }
 
-function signBody(body: string): string {
-  return crypto
-    .createHmac(
-      "sha256",
-      process.env.ALCHEMY_SOLANA_WITHDRAWAL_WEBHOOK_SIGNING_KEY!,
-    )
-    .update(Buffer.from(body, "utf8"))
-    .digest("hex");
+function createPayload() {
+  return [
+    {
+      signature: createSignature(),
+      meta: {
+        err: null,
+        logMessages: createWithdrawLogs(),
+      },
+    },
+  ];
 }
 
 describe("p2p withdrawal webhook helpers", () => {
   beforeEach(() => {
-    process.env.ALCHEMY_SOLANA_WITHDRAWAL_WEBHOOK_SIGNING_KEY =
-      "alchemy-solana-secret";
+    process.env.HELIUS_WEBHOOK_SECRET = "helius-withdrawal-secret";
     vi.clearAllMocks();
   });
 
@@ -92,7 +73,7 @@ describe("p2p withdrawal webhook helpers", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-alchemy-signature": signBody(body),
+          authorization: "Bearer helius-withdrawal-secret",
         },
         body,
       }),
@@ -113,7 +94,7 @@ describe("p2p withdrawal webhook helpers", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-alchemy-signature": "bad-signature",
+          authorization: "Bearer bad-secret",
         },
         body: JSON.stringify(createPayload()),
       }),

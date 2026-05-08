@@ -19,9 +19,9 @@ export function getP2PWebhookConfig() {
 
 export function getP2PWithdrawalWebhookConfig() {
   return {
-    signingKey: requireEnv(
-      "ALCHEMY_SOLANA_WITHDRAWAL_WEBHOOK_SIGNING_KEY",
-      process.env.ALCHEMY_SOLANA_WITHDRAWAL_WEBHOOK_SIGNING_KEY,
+    authorizationSecret: requireEnv(
+      "HELIUS_WEBHOOK_SECRET",
+      process.env.HELIUS_WEBHOOK_SECRET,
     ),
   };
 }

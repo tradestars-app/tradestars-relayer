@@ -19,7 +19,7 @@ It is intentionally separate from the main product app. The relayer owns deposit
 1. The product app records the user's encrypted payout details in the shared app store.
 2. The user signs the Solana `withdraw_request` transaction.
 3. The Solana program burns `tUSDC` and emits `WithdrawRequested`.
-4. Alchemy sends Solana logs to `POST /api/webhooks/p2p-withdrawals`.
+4. Helius sends raw Solana transaction logs to `POST /api/webhooks/p2p-withdrawals`.
 5. The relayer verifies `X-Alchemy-Signature`, decodes the Anchor event, and starts a Workflow run.
 6. The workflow reads the matching app withdrawal record by signature or `(wallet, nonce)`.
 7. The workflow calls `placeSellOrderForBurn`, waits for merchant acceptance, encrypts the user's payout details for the merchant, calls `deliverOfframpUpi`, and reconciles terminal Base statuses.
@@ -54,7 +54,7 @@ Auth:
 - `BASE_P2P_DIAMOND_ADDRESS`
 - `BASE_OFFRAMP_RELAYER_PRIVATE_KEY`
 - `BASE_SAFE_RECHECK_DELAYS_SECONDS` optional, defaults to `15,30,60,120`
-- `ALCHEMY_SOLANA_WITHDRAWAL_WEBHOOK_SIGNING_KEY`
+- `HELIUS_WEBHOOK_SECRET`
 - `P2P_WITHDRAWAL_ENCRYPTION_KEY`
 - `P2P_OFFRAMP_RELAY_ADDRESS`
 - `P2P_OFFRAMP_RELAY_PUBLIC_KEY`

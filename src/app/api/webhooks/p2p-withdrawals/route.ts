@@ -1,20 +1,30 @@
+import { timingSafeEqual } from "crypto";
 import { start } from "workflow/api";
 import {
   assertValidSolanaSignature,
   getWithdrawRequestedEvents,
 } from "@/lib/p2p/withdrawal-events";
-import { verifyAlchemyWebhookSignature } from "@/lib/p2p/alchemy";
 import { getP2PWithdrawalWebhookConfig } from "@/lib/p2p/config";
 import { processP2PWithdrawal } from "@/workflows/p2p-withdrawal";
 
 export const runtime = "nodejs";
 
+function verifyHeliusAuthorization(
+  authorizationHeader: string,
+  expectedSecret: string,
+): boolean {
+  const expected = `Bearer ${expectedSecret}`;
+  const received = Buffer.from(authorizationHeader, "utf8");
+  const target = Buffer.from(expected, "utf8");
+  return received.length === target.length && timingSafeEqual(received, target);
+}
+
 export async function POST(request: Request) {
   const rawBody = await request.text();
-  const signatureHeader = request.headers.get("x-alchemy-signature") ?? "";
-  const { signingKey } = getP2PWithdrawalWebhookConfig();
+  const authorizationHeader = request.headers.get("authorization") ?? "";
+  const { authorizationSecret } = getP2PWithdrawalWebhookConfig();
 
-  if (!verifyAlchemyWebhookSignature(rawBody, signatureHeader, signingKey)) {
+  if (!verifyHeliusAuthorization(authorizationHeader, authorizationSecret)) {
     return new Response("Unauthorized", { status: 401 });
   }
 
