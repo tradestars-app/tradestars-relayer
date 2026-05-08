@@ -1,22 +1,14 @@
 import { FatalError, sleep } from "workflow";
-import { getP2PWithdrawalWorkflowConfig } from "@/lib/p2p/config";
-import { decryptP2PPayoutAddress } from "@/lib/p2p/payout-encryption";
-import {
-  deliverOfframpUpi,
-  encryptPayoutForMerchant,
-  getOrderIdForBurn,
-  getP2POrder,
-  P2P_ORDER_STATUS,
-  placeSellOrderForBurn,
-  reconcileOfframp,
-  solanaSignatureToBurnBytes32,
-  type P2POfframpConfig,
-} from "@/lib/p2p/offramp";
-import {
-  getP2PWithdrawalForEvent,
-  updateP2PWithdrawal,
-  type WithdrawalRecord,
-} from "@/lib/store/p2p-withdrawal-store";
+import type { P2POfframpConfig } from "@/lib/p2p/offramp";
+import type { WithdrawalRecord } from "@/lib/store/p2p-withdrawal-store";
+
+const P2P_ORDER_STATUS = {
+  placed: 0,
+  accepted: 1,
+  paid: 2,
+  completed: 3,
+  cancelled: 4,
+} as const;
 
 export type P2PWithdrawalWorkflowInput = {
   signature: string;
@@ -25,7 +17,8 @@ export type P2PWithdrawalWorkflowInput = {
   nonce: string;
 };
 
-function getOfframpConfig(): P2POfframpConfig {
+async function getOfframpConfig(): Promise<P2POfframpConfig> {
+  const { getP2PWithdrawalWorkflowConfig } = await import("@/lib/p2p/config");
   const config = getP2PWithdrawalWorkflowConfig();
   return {
     baseRpcUrl: config.baseRpcUrl,
@@ -68,6 +61,9 @@ function validateWithdrawalRecord(
 async function loadWithdrawal(input: P2PWithdrawalWorkflowInput) {
   "use step";
 
+  const { getP2PWithdrawalForEvent } = await import(
+    "@/lib/store/p2p-withdrawal-store"
+  );
   const record = await getP2PWithdrawalForEvent({
     signature: input.signature,
     wallet: input.user,
@@ -80,6 +76,9 @@ async function loadWithdrawal(input: P2PWithdrawalWorkflowInput) {
 async function failWithdrawal(record: WithdrawalRecord, reason: string) {
   "use step";
 
+  const { updateP2PWithdrawal } = await import(
+    "@/lib/store/p2p-withdrawal-store"
+  );
   await updateP2PWithdrawal(record, {
     status: "failed",
     failureReason: reason,
@@ -88,10 +87,13 @@ async function failWithdrawal(record: WithdrawalRecord, reason: string) {
 
 async function markStatus(
   record: WithdrawalRecord,
-  update: Parameters<typeof updateP2PWithdrawal>[1],
+  update: Partial<Pick<WithdrawalRecord, "status" | "failureReason">>,
 ) {
   "use step";
 
+  const { updateP2PWithdrawal } = await import(
+    "@/lib/store/p2p-withdrawal-store"
+  );
   return updateP2PWithdrawal(record, update);
 }
 
@@ -101,7 +103,15 @@ async function ensureBaseOrder(
 ) {
   "use step";
 
-  const config = getOfframpConfig();
+  const {
+    getOrderIdForBurn,
+    placeSellOrderForBurn,
+    solanaSignatureToBurnBytes32,
+  } = await import("@/lib/p2p/offramp");
+  const { updateP2PWithdrawal } = await import(
+    "@/lib/store/p2p-withdrawal-store"
+  );
+  const config = await getOfframpConfig();
   const existingOrderId =
     record.baseOrderId ??
     (await getOrderIdForBurn({
@@ -142,8 +152,9 @@ async function ensureBaseOrder(
 async function readOrderStatus(orderId: string) {
   "use step";
 
+  const { getP2POrder } = await import("@/lib/p2p/offramp");
   return getP2POrder({
-    config: getOfframpConfig(),
+    config: await getOfframpConfig(),
     orderId,
   });
 }
@@ -151,7 +162,17 @@ async function readOrderStatus(orderId: string) {
 async function deliverPayoutDetails(record: WithdrawalRecord, merchantPubkey: string) {
   "use step";
 
-  const config = getOfframpConfig();
+  const { decryptP2PPayoutAddress } = await import(
+    "@/lib/p2p/payout-encryption"
+  );
+  const {
+    deliverOfframpUpi,
+    encryptPayoutForMerchant,
+  } = await import("@/lib/p2p/offramp");
+  const { updateP2PWithdrawal } = await import(
+    "@/lib/store/p2p-withdrawal-store"
+  );
+  const config = await getOfframpConfig();
   const payoutAddress = decryptP2PPayoutAddress(record.payoutAddressEncrypted!);
   const encryptedPayoutAddress = await encryptPayoutForMerchant({
     config,
@@ -173,8 +194,12 @@ async function deliverPayoutDetails(record: WithdrawalRecord, merchantPubkey: st
 async function reconcileTerminal(record: WithdrawalRecord, status: number) {
   "use step";
 
+  const { reconcileOfframp } = await import("@/lib/p2p/offramp");
+  const { updateP2PWithdrawal } = await import(
+    "@/lib/store/p2p-withdrawal-store"
+  );
   const txHash = await reconcileOfframp({
-    config: getOfframpConfig(),
+    config: await getOfframpConfig(),
     orderId: record.baseOrderId!,
     status,
   });
@@ -195,6 +220,9 @@ export async function processP2PWithdrawal(input: P2PWithdrawalWorkflowInput) {
   try {
     record = await ensureBaseOrder(record, input);
 
+    const { getP2PWithdrawalWorkflowConfig } = await import(
+      "@/lib/p2p/config"
+    );
     const { merchantPollDelaysSeconds, terminalPollDelaysSeconds } =
       getP2PWithdrawalWorkflowConfig();
 
