@@ -31,8 +31,9 @@ export async function POST(request: Request) {
   let scheduled = 0;
   let ignored = 0;
   let failed = 0;
+  const logs = getWebhookLogs(payload);
 
-  for (const log of getWebhookLogs(payload)) {
+  for (const log of logs) {
     let operation:
       | {
           orderId: string;
@@ -106,6 +107,24 @@ export async function POST(request: Request) {
   }
 
   const status = failed > 0 ? 500 : 200;
+  console.info("Processed Base P2P deposit webhook", {
+    webhookEventId: payload.id,
+    logCount: logs.length,
+    scheduled,
+    ignored,
+    failed,
+  });
+  if (scheduled === 0 && failed === 0 && logs.length > 0) {
+    const firstLog = logs[0];
+    console.warn("Base P2P deposit webhook contained no matching logs", {
+      webhookEventId: payload.id,
+      expectedTopic0: depositTopic0,
+      expectedContractAddress: depositContractAddress,
+      firstLogAddress: firstLog?.address,
+      firstLogTopic0: firstLog?.topics?.[0],
+    });
+  }
+
   return Response.json(
     {
       scheduled,
