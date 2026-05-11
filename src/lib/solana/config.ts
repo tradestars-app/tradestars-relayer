@@ -1,4 +1,4 @@
-import { Keypair, PublicKey } from "@solana/web3.js";
+import { type Commitment, Keypair, PublicKey } from "@solana/web3.js";
 import { requireEnv } from "@/lib/env-utils";
 
 export function getSolanaRpcUrl(): string {
@@ -27,4 +27,14 @@ export function getSolanaMintComputeUnitPriceMicroLamports(): number {
     throw new Error("SOLANA_MINT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS must be a non-negative number");
   }
   return value;
+}
+
+export function getSolanaMintConfirmationCommitment(): Commitment {
+  const raw = process.env.SOLANA_MINT_CONFIRMATION_COMMITMENT ?? "confirmed";
+  if (raw !== "processed" && raw !== "confirmed" && raw !== "finalized") {
+    throw new Error(
+      "SOLANA_MINT_CONFIRMATION_COMMITMENT must be processed, confirmed, or finalized",
+    );
+  }
+  return raw;
 }

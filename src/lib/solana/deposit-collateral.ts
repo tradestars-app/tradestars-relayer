@@ -4,10 +4,17 @@ import {
   getAssociatedTokenAddressSync,
   TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
-import { ComputeBudgetProgram, PublicKey, SystemProgram } from "@solana/web3.js";
+import {
+  ComputeBudgetProgram,
+  type Commitment,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+} from "@solana/web3.js";
 import {
   getProgramId,
   getSolanaMintComputeUnitPriceMicroLamports,
+  getSolanaMintConfirmationCommitment,
 } from "@/lib/solana/config";
 import {
   getDepositMarkerPda,
@@ -52,6 +59,9 @@ const DEPOSIT_COLLATERAL_IDL = {
   ],
 } as const satisfies Idl;
 
+const MINT_CONFIRMATION_TIMEOUT_MS = 45_000;
+const MINT_CONFIRMATION_POLL_MS = 1_000;
+
 export type DepositCollateralInput = {
   user: PublicKey;
   amount: bigint;
@@ -63,6 +73,44 @@ export type DepositCollateralResult =
   | { status: "minted"; signature: string }
   | { status: "duplicate" };
 
+function hasReachedCommitment(
+  status: "processed" | "confirmed" | "finalized" | null | undefined,
+  commitment: Commitment,
+): boolean {
+  if (!status) return false;
+  if (commitment === "processed") return true;
+  if (commitment === "confirmed") {
+    return status === "confirmed" || status === "finalized";
+  }
+  return status === "finalized";
+}
+
+async function waitForSignatureCommitment(
+  signature: string,
+  commitment: Commitment,
+): Promise<void> {
+  const connection = getRpcConnection();
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < MINT_CONFIRMATION_TIMEOUT_MS) {
+    const response = await connection.getSignatureStatuses([signature], {
+      searchTransactionHistory: false,
+    });
+    const status = response.value[0];
+    if (status?.err) {
+      throw new Error(`Solana mint transaction failed: ${JSON.stringify(status.err)}`);
+    }
+    if (hasReachedCommitment(status?.confirmationStatus, commitment)) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, MINT_CONFIRMATION_POLL_MS));
+  }
+
+  throw new Error(
+    `Timed out waiting for Solana mint ${signature} to reach ${commitment}`,
+  );
+}
+
 export async function depositCollateral(
   input: DepositCollateralInput,
 ): Promise<DepositCollateralResult> {
@@ -72,6 +120,7 @@ export async function depositCollateral(
   const program = new Program(DEPOSIT_COLLATERAL_IDL, provider);
   const computeUnitPriceMicroLamports =
     getSolanaMintComputeUnitPriceMicroLamports();
+  const confirmationCommitment = getSolanaMintConfirmationCommitment();
 
   const [platformConfig] = getPlatformConfigPda();
   const [tusdcMint] = getTusdcMintPda();
@@ -93,7 +142,7 @@ export async function depositCollateral(
   }
 
   try {
-    const signature = await program.methods
+    const instruction = await program.methods
       .depositCollateral(
         new BN(input.amount.toString()),
         input.baseTxHashBytes,
@@ -111,12 +160,29 @@ export async function depositCollateral(
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })
-      .preInstructions([
-        ComputeBudgetProgram.setComputeUnitPrice({
-          microLamports: computeUnitPriceMicroLamports,
-        }),
-      ])
-      .rpc();
+      .instruction();
+
+    const { blockhash } = await connection.getLatestBlockhash("processed");
+    const transaction = new Transaction({
+      feePayer: mintingKeypair.publicKey,
+      recentBlockhash: blockhash,
+    }).add(
+      ComputeBudgetProgram.setComputeUnitPrice({
+        microLamports: computeUnitPriceMicroLamports,
+      }),
+      instruction,
+    );
+    transaction.sign(mintingKeypair);
+
+    const signature = await connection.sendRawTransaction(
+      transaction.serialize(),
+      {
+        maxRetries: 5,
+        preflightCommitment: "processed",
+        skipPreflight: false,
+      },
+    );
+    await waitForSignatureCommitment(signature, confirmationCommitment);
 
     return { status: "minted", signature };
   } catch (error) {
