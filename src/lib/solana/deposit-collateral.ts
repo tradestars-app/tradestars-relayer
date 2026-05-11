@@ -4,8 +4,11 @@ import {
   getAssociatedTokenAddressSync,
   TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
-import { getProgramId } from "@/lib/solana/config";
+import { ComputeBudgetProgram, PublicKey, SystemProgram } from "@solana/web3.js";
+import {
+  getProgramId,
+  getSolanaMintComputeUnitPriceMicroLamports,
+} from "@/lib/solana/config";
 import {
   getDepositMarkerPda,
   getMintingKeypair,
@@ -67,6 +70,8 @@ export async function depositCollateral(
   const mintingKeypair = getMintingKeypair();
   const provider = getMintingProvider();
   const program = new Program(DEPOSIT_COLLATERAL_IDL, provider);
+  const computeUnitPriceMicroLamports =
+    getSolanaMintComputeUnitPriceMicroLamports();
 
   const [platformConfig] = getPlatformConfigPda();
   const [tusdcMint] = getTusdcMintPda();
@@ -106,6 +111,11 @@ export async function depositCollateral(
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })
+      .preInstructions([
+        ComputeBudgetProgram.setComputeUnitPrice({
+          microLamports: computeUnitPriceMicroLamports,
+        }),
+      ])
       .rpc();
 
     return { status: "minted", signature };

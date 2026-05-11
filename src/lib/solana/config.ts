@@ -19,3 +19,12 @@ export function getMintingAuthorityKeypair(): Keypair {
   const secret = Uint8Array.from(JSON.parse(raw));
   return Keypair.fromSecretKey(secret);
 }
+
+export function getSolanaMintComputeUnitPriceMicroLamports(): number {
+  const raw = process.env.SOLANA_MINT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS ?? "10000";
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error("SOLANA_MINT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS must be a non-negative number");
+  }
+  return value;
+}
