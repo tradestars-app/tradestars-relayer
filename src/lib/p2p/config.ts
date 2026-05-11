@@ -30,7 +30,8 @@ export function getP2PDepositWorkflowConfig() {
   return {
     baseRpcUrl: requireEnv("BASE_RPC_URL", process.env.BASE_RPC_URL),
     safeRecheckDelaysSeconds: (
-      process.env.BASE_SAFE_RECHECK_DELAYS_SECONDS || "3,5,8,12,20,30,45,60"
+      process.env.BASE_SAFE_RECHECK_DELAYS_SECONDS ||
+      "3,5,8,12,20,30,45,60,90,120,120,120"
     )
       .split(",")
       .map((value) => Number(value.trim()))
