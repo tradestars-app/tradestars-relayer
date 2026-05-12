@@ -13,10 +13,24 @@ function verifyHeliusAuthorization(
   authorizationHeader: string,
   expectedSecret: string,
 ): boolean {
-  const expected = `Bearer ${expectedSecret}`;
-  const received = Buffer.from(authorizationHeader, "utf8");
-  const target = Buffer.from(expected, "utf8");
+  const receivedSecret = readAuthorizationSecret(authorizationHeader);
+  if (!receivedSecret) return false;
+
+  const received = Buffer.from(receivedSecret, "utf8");
+  const target = Buffer.from(expectedSecret, "utf8");
   return received.length === target.length && timingSafeEqual(received, target);
+}
+
+function readAuthorizationSecret(authorizationHeader: string): string | null {
+  const trimmed = authorizationHeader.trim();
+  if (!trimmed) return null;
+
+  const [scheme, ...rest] = trimmed.split(/\s+/);
+  if (scheme.toLowerCase() === "bearer" && rest.length > 0) {
+    return rest.join(" ");
+  }
+
+  return trimmed;
 }
 
 export async function POST(request: Request) {

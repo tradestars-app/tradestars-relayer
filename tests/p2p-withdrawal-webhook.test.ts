@@ -88,6 +88,25 @@ describe("p2p withdrawal webhook helpers", () => {
     });
   });
 
+  it("accepts the raw Helius webhook secret without a Bearer prefix", async () => {
+    const mockedStart = vi.mocked(start);
+    mockedStart.mockResolvedValueOnce({ id: "run_withdrawal" } as never);
+
+    const response = await POST(
+      new Request("http://localhost/api/webhooks/p2p-withdrawals", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "helius-withdrawal-secret",
+        },
+        body: JSON.stringify(createPayload()),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockedStart).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects invalid webhook signatures", async () => {
     const response = await POST(
       new Request("http://localhost/api/webhooks/p2p-withdrawals", {
