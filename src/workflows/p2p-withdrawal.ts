@@ -10,6 +10,8 @@ const P2P_ORDER_STATUS = {
   cancelled: 4,
 } as const;
 
+const WITHDRAWAL_RECORD_LOOKUP_DELAYS_SECONDS = [1, 2, 3, 5, 8, 13] as const;
+
 export type P2PWithdrawalWorkflowInput = {
   signature: string;
   user: string;
@@ -32,12 +34,9 @@ async function getOfframpConfig(): Promise<P2POfframpConfig> {
 }
 
 function validateWithdrawalRecord(
-  record: WithdrawalRecord | null,
+  record: WithdrawalRecord,
   input: P2PWithdrawalWorkflowInput,
 ): asserts record is WithdrawalRecord {
-  if (!record) {
-    throw new FatalError("No matching P2P withdrawal record found");
-  }
   if (record.payoutMethod !== "p2p") {
     throw new FatalError("Withdrawal is not a P2P cashout");
   }
@@ -69,6 +68,8 @@ async function loadWithdrawal(input: P2PWithdrawalWorkflowInput) {
     wallet: input.user,
     nonce: input.nonce,
   });
+  if (!record) return null;
+
   validateWithdrawalRecord(record, input);
   return record;
 }
@@ -213,6 +214,15 @@ export async function processP2PWithdrawal(input: P2PWithdrawalWorkflowInput) {
   "use workflow";
 
   let record = await loadWithdrawal(input);
+  for (const delaySeconds of WITHDRAWAL_RECORD_LOOKUP_DELAYS_SECONDS) {
+    if (record) break;
+    await sleep(`${delaySeconds}s`);
+    record = await loadWithdrawal(input);
+  }
+  if (!record) {
+    throw new FatalError("No matching P2P withdrawal record found");
+  }
+
   if (record.status === "paid" || record.status === "cancelled") {
     return record;
   }
