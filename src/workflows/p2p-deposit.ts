@@ -11,8 +11,10 @@ import {
 async function verifyBaseDeposit(input: P2PDepositWorkflowInput) {
   "use step";
 
-  const { baseRpcUrl, expectedTopic0, expectedContractAddress } = {
-    baseRpcUrl: getP2PDepositWorkflowConfig().baseRpcUrl,
+  const depositConfig = getP2PDepositWorkflowConfig();
+  const { baseRpcUrl, baseFinality, expectedTopic0, expectedContractAddress } = {
+    baseRpcUrl: depositConfig.baseRpcUrl,
+    baseFinality: depositConfig.baseFinality,
     expectedTopic0: getP2PWebhookConfig().depositTopic0,
     expectedContractAddress: getP2PWebhookConfig().depositContractAddress,
   };
@@ -21,6 +23,7 @@ async function verifyBaseDeposit(input: P2PDepositWorkflowInput) {
     baseRpcUrl,
     expectedTopic0,
     expectedContractAddress,
+    finality: baseFinality,
   });
 }
 

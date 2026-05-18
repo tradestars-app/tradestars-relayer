@@ -27,11 +27,18 @@ export function getP2PWithdrawalWebhookConfig() {
 }
 
 export function getP2PDepositWorkflowConfig() {
+  const baseFinality = process.env.BASE_P2P_DEPOSIT_FINALITY || "safe";
+  if (baseFinality !== "safe" && baseFinality !== "receipt") {
+    throw new Error("BASE_P2P_DEPOSIT_FINALITY must be safe or receipt");
+  }
+  const parsedBaseFinality: "safe" | "receipt" = baseFinality;
+
   return {
     baseRpcUrl: requireEnv("BASE_RPC_URL", process.env.BASE_RPC_URL),
+    baseFinality: parsedBaseFinality,
     safeRecheckDelaysSeconds: (
       process.env.BASE_SAFE_RECHECK_DELAYS_SECONDS ||
-      "3,5,8,12,20,30,45,60,90,120,120,120"
+      "3,5,8,10,10,10,10,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15"
     )
       .split(",")
       .map((value) => Number(value.trim()))

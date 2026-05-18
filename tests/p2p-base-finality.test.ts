@@ -72,6 +72,7 @@ describe("verifySafeBaseDeposit", () => {
           baseRpcUrl: "https://base.example",
           expectedTopic0: topic0,
           expectedContractAddress: contract,
+          finality: "safe",
         },
       ),
     ).resolves.toEqual({
@@ -97,11 +98,38 @@ describe("verifySafeBaseDeposit", () => {
           baseRpcUrl: "https://base.example",
           expectedTopic0: topic0,
           expectedContractAddress: contract,
+          finality: "safe",
         },
       ),
     ).resolves.toEqual({
       status: "pending",
       reason: "Base transaction is not safe yet",
+    });
+  });
+
+  it("accepts matching Base deposits at receipt finality", async () => {
+    vi.stubGlobal("fetch", createFetchMock(102n, 101n));
+
+    await expect(
+      verifySafeBaseDeposit(
+        {
+          orderId: "42",
+          wallet,
+          amount: "10000000",
+          txHash,
+          logIndex: 7,
+        },
+        {
+          baseRpcUrl: "https://base.example",
+          expectedTopic0: topic0,
+          expectedContractAddress: contract,
+          finality: "receipt",
+        },
+      ),
+    ).resolves.toEqual({
+      status: "safe",
+      receiptBlockNumber: 102,
+      safeBlockNumber: 102,
     });
   });
 });

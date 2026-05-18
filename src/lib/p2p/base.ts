@@ -46,6 +46,7 @@ type VerifyBaseDepositOptions = {
   baseRpcUrl: string;
   expectedTopic0: string;
   expectedContractAddress?: string | null;
+  finality: "receipt" | "safe";
 };
 
 function isHexString(value: string, byteLength?: number): boolean {
@@ -245,6 +246,15 @@ export async function verifySafeBaseDeposit(
     };
   }
 
+  const receiptBlockNumber = hexToNumber(receipt.blockNumber);
+  if (options.finality === "receipt") {
+    return {
+      status: "safe",
+      safeBlockNumber: receiptBlockNumber,
+      receiptBlockNumber,
+    };
+  }
+
   const safeBlock = await callBaseRpc<BaseBlock | null>(
     options.baseRpcUrl,
     "eth_getBlockByNumber",
@@ -258,7 +268,6 @@ export async function verifySafeBaseDeposit(
     };
   }
 
-  const receiptBlockNumber = hexToNumber(receipt.blockNumber);
   const safeBlockNumber = hexToNumber(safeBlock.number);
 
   if (receiptBlockNumber > safeBlockNumber) {

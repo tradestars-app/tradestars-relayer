@@ -10,7 +10,7 @@ It is intentionally separate from the main product app. The relayer owns deposit
 2. The route verifies `X-Alchemy-Signature`.
 3. Matching logs are decoded into `(wallet, amount, txHash, logIndex)`.
 4. One Workflow run is started per deposit log.
-5. The workflow re-checks the Base receipt until the deposit is in a `safe` block.
+5. The workflow re-checks the Base receipt until the configured finality is reached.
 6. The relayer calls Solana `deposit_collateral(amount, base_tx_hash, log_index)`.
 7. The Solana program creates the replay marker and mints `tUSDC`.
 
@@ -28,7 +28,8 @@ It is intentionally separate from the main product app. The relayer owns deposit
 
 - Alchemy webhooks are authenticated with HMAC.
 - The relayer re-fetches the Base receipt before minting.
-- Minting only happens once the receipt block is at or below Base `safe`.
+- In production, minting should only happen once the receipt block is at or below Base `safe`.
+- Preview/dev deployments may use receipt-level finality to keep P2P testing fast.
 - Only the configured Solana `minting_authority` can call `deposit_collateral`.
 - Solana replay markers keyed by `(base_tx_hash, log_index)` prevent duplicate minting.
 - Operation logs are for support and observability only, not correctness.
@@ -53,7 +54,8 @@ Auth:
 - `BASE_P2P_INTEGRATOR_ADDRESS`
 - `BASE_P2P_DIAMOND_ADDRESS`
 - `BASE_OFFRAMP_RELAYER_PRIVATE_KEY`
-- `BASE_SAFE_RECHECK_DELAYS_SECONDS` optional, defaults to `3,5,8,12,20,30,45,60,90,120,120,120`
+- `BASE_P2P_DEPOSIT_FINALITY` optional, `safe` or `receipt`, defaults to `safe`
+- `BASE_SAFE_RECHECK_DELAYS_SECONDS` optional, defaults to steady short polling for roughly 5 minutes
 - `HELIUS_WEBHOOK_SECRET`
 - `P2P_WITHDRAWAL_ENCRYPTION_KEY`
 - `P2P_OFFRAMP_RELAY_ADDRESS`
