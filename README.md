@@ -75,6 +75,26 @@ schedules the same deposit workflow used by the Alchemy webhook. The workflow
 still re-checks Base finality and the Solana program still enforces
 `(base_tx_hash, log_index)` replay protection.
 
+## Manual P2P Withdrawal Replay
+
+Use this when a Solana withdrawal burn was observed but the P2P Base SELL
+workflow did not complete. The dry run validates that the app withdrawal record
+matches the Solana burn event fields.
+
+```bash
+pnpm replay:p2p-withdrawal --env=.env.prod --relayer-url=https://<production-relayer> --signature=<solana_tx> --user=<solana_wallet> --amount=<raw_usdc> --nonce=<withdraw_nonce>
+```
+
+To schedule the deployed workflow:
+
+```bash
+pnpm replay:p2p-withdrawal --env=.env.prod --relayer-url=https://<production-relayer> --signature=<solana_tx> --user=<solana_wallet> --amount=<raw_usdc> --nonce=<withdraw_nonce> --execute --confirm-mainnet
+```
+
+Replay is safe to retry: the workflow first checks `solanaBurnToOrderId` on the
+TradeStars integrator and resumes an existing Base order when one already
+exists.
+
 ## Environment
 
 - `ALCHEMY_P2P_WEBHOOK_SIGNING_KEY`

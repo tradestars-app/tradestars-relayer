@@ -202,7 +202,6 @@ async function reconcileTerminal(record: WithdrawalRecord, status: number) {
   const txHash = await reconcileOfframp({
     config: await getOfframpConfig(),
     orderId: record.baseOrderId!,
-    status,
   });
   return updateP2PWithdrawal(record, {
     status: status === P2P_ORDER_STATUS.completed ? "paid" : "cancelled",

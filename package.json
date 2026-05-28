@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "replay:base-deposit": "node scripts/replay-base-deposit.mjs",
+    "replay:p2p-withdrawal": "node scripts/replay-p2p-withdrawal.mjs",
     "purge:p2p-deposit-ops": "node scripts/purge-p2p-deposit-operations.mjs"
   },
   "dependencies": {

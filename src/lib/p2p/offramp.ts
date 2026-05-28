@@ -96,10 +96,7 @@ const INTEGRATOR_ABI = [
     name: "reconcile",
     type: "function",
     stateMutability: "nonpayable",
-    inputs: [
-      { name: "orderId", type: "uint256" },
-      { name: "currentStatus", type: "uint8" },
-    ],
+    inputs: [{ name: "orderId", type: "uint256" }],
     outputs: [],
   },
   {
@@ -313,14 +310,13 @@ export async function deliverOfframpUpi(params: {
 export async function reconcileOfframp(params: {
   config: P2POfframpConfig;
   orderId: string;
-  status: number;
 }): Promise<Hash> {
   const { walletClient, account } = getClients(params.config);
   return walletClient.writeContract({
     address: params.config.integratorAddress,
     abi: INTEGRATOR_ABI,
     functionName: "reconcile",
-    args: [BigInt(params.orderId), params.status],
+    args: [BigInt(params.orderId)],
     account,
   });
 }
