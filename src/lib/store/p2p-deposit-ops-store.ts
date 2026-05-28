@@ -7,6 +7,7 @@ import {
   p2pDepositOperationKey,
   p2pDepositOperationsIndexKey,
 } from "@/lib/store/keys";
+import { linkP2PDepositSubmission } from "@/lib/store/p2p-deposit-submissions-store";
 
 const MAX_HISTORY_EVENTS = 20;
 
@@ -84,6 +85,7 @@ export async function upsertP2PDepositOperation(
     member: next.id,
   });
   await pipeline.exec();
+  await linkP2PDepositSubmission(next.orderId, next.id);
 
   return next;
 }

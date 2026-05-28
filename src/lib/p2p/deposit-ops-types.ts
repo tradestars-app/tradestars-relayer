@@ -33,6 +33,20 @@ export type P2PDepositOperation = {
   history: P2PDepositOperationEvent[];
 };
 
+export type P2PDepositSubmissionStatus = "processing" | "linked";
+
+export type P2PDepositSubmission = {
+  id: string;
+  orderId: string;
+  wallet: string;
+  amount: string;
+  status: P2PDepositSubmissionStatus;
+  linkedOperationId?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type AdminP2PDepositOperationsData = {
   operations: P2PDepositOperation[];
+  submissions: P2PDepositSubmission[];
 };

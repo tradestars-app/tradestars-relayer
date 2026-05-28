@@ -8,6 +8,12 @@ export const p2pDepositOperationKey = (txHash: string, logIndex: number) =>
 export const p2pDepositOperationsIndexKey = () =>
   `${KEY_PREFIX}:p2p:deposits:index`;
 
+export const p2pDepositSubmissionKey = (orderId: string) =>
+  `${KEY_PREFIX}:p2p:deposit-submission:${orderId}`;
+
+export const p2pDepositSubmissionsIndexKey = () =>
+  `${KEY_PREFIX}:p2p:deposit-submissions:index`;
+
 function resolveAppKeyPrefix() {
   const explicitPrefix =
     process.env.TRADESTARS_APP_STORE_NAMESPACE?.trim() ||
