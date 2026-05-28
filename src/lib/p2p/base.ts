@@ -49,7 +49,18 @@ type VerifyBaseDepositOptions = {
   finality: "receipt" | "safe";
 };
 
-function isHexString(value: string, byteLength?: number): boolean {
+type DecodeBaseReceiptDepositLogsOptions = {
+  baseRpcUrl: string;
+  expectedTopic0: string;
+  expectedContractAddress?: string | null;
+};
+
+export type BaseDepositReceiptMatch = {
+  input: P2PDepositWorkflowInput;
+  receiptBlockNumber: number;
+};
+
+export function isHexString(value: string, byteLength?: number): boolean {
   if (!/^(0x)?[0-9a-fA-F]+$/.test(value)) {
     return false;
   }
@@ -62,21 +73,21 @@ function isHexString(value: string, byteLength?: number): boolean {
   return normalized.length === byteLength * 2;
 }
 
-function isHexQuantity(value: string): boolean {
+export function isHexQuantity(value: string): boolean {
   return /^0x[0-9a-fA-F]+$/.test(value);
 }
 
-function normalizeHex(value: string): string {
+export function normalizeHex(value: string): string {
   return value.startsWith("0x")
     ? value.toLowerCase()
     : `0x${value.toLowerCase()}`;
 }
 
-function hexToNumber(value: string): number {
+export function hexToNumber(value: string): number {
   return Number(BigInt(normalizeHex(value)));
 }
 
-async function callBaseRpc<T>(
+export async function callBaseRpc<T>(
   rpcUrl: string,
   method: string,
   params: unknown[],
@@ -156,6 +167,71 @@ function decodeReceiptLog(
 
 function walletBytesToBase58(walletBase64: string): string {
   return bs58.encode(Buffer.from(walletBase64, "base64"));
+}
+
+export async function decodeBaseDepositLogsFromReceipt(
+  txHash: string,
+  options: DecodeBaseReceiptDepositLogsOptions,
+): Promise<BaseDepositReceiptMatch[]> {
+  if (!isHexString(txHash, 32)) {
+    throw new Error("Transaction hash must be a 32-byte hex string");
+  }
+
+  const normalizedTxHash = normalizeHex(txHash);
+  const receipt = await callBaseRpc<BaseTransactionReceipt | null>(
+    options.baseRpcUrl,
+    "eth_getTransactionReceipt",
+    [normalizedTxHash],
+  );
+
+  if (!receipt) {
+    throw new Error("Transaction receipt not available");
+  }
+
+  if (receipt.status && normalizeHex(receipt.status) !== "0x1") {
+    throw new Error("Base transaction failed");
+  }
+
+  if (!receipt.blockNumber || !isHexQuantity(receipt.blockNumber)) {
+    throw new Error("Transaction receipt has no block number yet");
+  }
+
+  const receiptBlockNumber = hexToNumber(receipt.blockNumber);
+  const matches: BaseDepositReceiptMatch[] = [];
+
+  for (const log of receipt.logs ?? []) {
+    if (log.removed) {
+      continue;
+    }
+    if (
+      log.transactionHash &&
+      normalizeHex(log.transactionHash) !== normalizedTxHash
+    ) {
+      continue;
+    }
+
+    const decoded = decodeReceiptLog(
+      log,
+      options.expectedTopic0,
+      options.expectedContractAddress,
+    );
+    if (!decoded) {
+      continue;
+    }
+
+    matches.push({
+      receiptBlockNumber,
+      input: {
+        orderId: decoded.orderId,
+        wallet: walletBytesToBase58(decoded.wallet),
+        amount: decoded.amount,
+        txHash: normalizedTxHash,
+        logIndex: decoded.logIndex,
+      },
+    });
+  }
+
+  return matches;
 }
 
 export async function verifySafeBaseDeposit(

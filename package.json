@@ -8,6 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "replay:base-deposit": "node scripts/replay-base-deposit.mjs",
     "purge:p2p-deposit-ops": "node scripts/purge-p2p-deposit-operations.mjs"
   },
   "dependencies": {

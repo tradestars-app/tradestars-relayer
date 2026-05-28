@@ -46,6 +46,35 @@ Auth:
 
 - `Authorization: Bearer <RELAYER_ADMIN_API_KEY>`
 
+## Manual Base Deposit Replay
+
+Use this when Alchemy missed a Base deposit webhook, the webhook endpoint was
+down, or a webhook was acknowledged before the workflow was scheduled.
+
+Dry run first:
+
+```bash
+pnpm replay:base-deposit --env=.env.local --relayer-url=https://<preview-relayer> --network=base-sepolia --tx=0x...
+pnpm replay:base-deposit --env=.env.prod --relayer-url=https://<production-relayer> --network=base-mainnet --tx=0x...
+```
+
+Execute only after the decoded wallet, amount, order id, tx hash, and log index
+match the deposit being recovered:
+
+```bash
+pnpm replay:base-deposit --env=.env.local --relayer-url=https://<preview-relayer> --network=base-sepolia --tx=0x... --execute
+pnpm replay:base-deposit --env=.env.prod --relayer-url=https://<production-relayer> --network=base-mainnet --tx=0x... --execute --confirm-mainnet
+```
+
+If the transaction emitted more than one matching deposit event, pass
+`--log-index=<index>`. The script calls the protected relayer admin replay API
+using `RELAYER_ADMIN_API_URL` or `--relayer-url`, plus
+`RELAYER_ADMIN_API_KEY`. The deployed relayer verifies its configured Base RPC
+chain id, decodes the deposit from the Base receipt, records the operation, and
+schedules the same deposit workflow used by the Alchemy webhook. The workflow
+still re-checks Base finality and the Solana program still enforces
+`(base_tx_hash, log_index)` replay protection.
+
 ## Environment
 
 - `ALCHEMY_P2P_WEBHOOK_SIGNING_KEY`

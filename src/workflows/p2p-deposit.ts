@@ -1,7 +1,7 @@
 import { FatalError, sleep } from "workflow";
 import {
+  getP2PDepositEventConfig,
   getP2PDepositWorkflowConfig,
-  getP2PWebhookConfig,
 } from "@/lib/p2p/config";
 import {
   type P2PDepositWorkflowInput,
@@ -15,8 +15,8 @@ async function verifyBaseDeposit(input: P2PDepositWorkflowInput) {
   const { baseRpcUrl, baseFinality, expectedTopic0, expectedContractAddress } = {
     baseRpcUrl: depositConfig.baseRpcUrl,
     baseFinality: depositConfig.baseFinality,
-    expectedTopic0: getP2PWebhookConfig().depositTopic0,
-    expectedContractAddress: getP2PWebhookConfig().depositContractAddress,
+    expectedTopic0: getP2PDepositEventConfig().depositTopic0,
+    expectedContractAddress: getP2PDepositEventConfig().depositContractAddress,
   };
 
   return verifySafeBaseDeposit(input, {

@@ -1,11 +1,7 @@
 import { requireEnv } from "@/lib/env-utils";
 
-export function getP2PWebhookConfig() {
+export function getP2PDepositEventConfig() {
   return {
-    signingKey: requireEnv(
-      "ALCHEMY_P2P_WEBHOOK_SIGNING_KEY",
-      process.env.ALCHEMY_P2P_WEBHOOK_SIGNING_KEY,
-    ),
     depositTopic0: requireEnv(
       "ALCHEMY_P2P_DEPOSIT_TOPIC0",
       process.env.ALCHEMY_P2P_DEPOSIT_TOPIC0,
@@ -14,6 +10,16 @@ export function getP2PWebhookConfig() {
       "BASE_P2P_INTEGRATOR_ADDRESS",
       process.env.BASE_P2P_INTEGRATOR_ADDRESS,
     ).toLowerCase(),
+  };
+}
+
+export function getP2PWebhookConfig() {
+  return {
+    signingKey: requireEnv(
+      "ALCHEMY_P2P_WEBHOOK_SIGNING_KEY",
+      process.env.ALCHEMY_P2P_WEBHOOK_SIGNING_KEY,
+    ),
+    ...getP2PDepositEventConfig(),
   };
 }
 

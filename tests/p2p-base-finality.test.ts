@@ -1,6 +1,9 @@
 import { PublicKey } from "@solana/web3.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { verifySafeBaseDeposit } from "@/lib/p2p/base";
+import {
+  decodeBaseDepositLogsFromReceipt,
+  verifySafeBaseDeposit,
+} from "@/lib/p2p/base";
 
 const wallet = new PublicKey(Uint8Array.from(Array(32).fill(17))).toBase58();
 const txHash = `0x${"12".repeat(32)}`;
@@ -131,5 +134,34 @@ describe("verifySafeBaseDeposit", () => {
       receiptBlockNumber: 102,
       safeBlockNumber: 102,
     });
+  });
+});
+
+describe("decodeBaseDepositLogsFromReceipt", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("decodes canonical workflow inputs from a Base transaction receipt", async () => {
+    vi.stubGlobal("fetch", createFetchMock(100n, 101n));
+
+    await expect(
+      decodeBaseDepositLogsFromReceipt(txHash, {
+        baseRpcUrl: "https://base.example",
+        expectedTopic0: topic0,
+        expectedContractAddress: contract,
+      }),
+    ).resolves.toEqual([
+      {
+        receiptBlockNumber: 100,
+        input: {
+          orderId: "42",
+          wallet,
+          amount: "10000000",
+          txHash,
+          logIndex: 7,
+        },
+      },
+    ]);
   });
 });

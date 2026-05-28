@@ -5,9 +5,7 @@ import {
   verifyAlchemyWebhookSignature,
 } from "@/lib/p2p/alchemy";
 import { getP2PWebhookConfig } from "@/lib/p2p/config";
-import { upsertP2PDepositOperation } from "@/lib/store/p2p-deposit-ops-store";
-import { start } from "workflow/api";
-import { processP2PDeposit } from "@/workflows/p2p-deposit";
+import { recordAndScheduleP2PDepositWorkflow } from "@/lib/p2p/deposit-processing";
 
 export const runtime = "nodejs";
 
@@ -63,41 +61,17 @@ export async function POST(request: Request) {
         logIndex: decoded.logIndex,
       };
 
-      await upsertP2PDepositOperation({
-        ...operation,
+      await recordAndScheduleP2PDepositWorkflow(operation, {
         webhookEventId: payload.id,
-        status: "webhook_received",
-        message: "Alchemy webhook received and verified",
-      });
-
-      const run = await start(processP2PDeposit, [{ ...operation }]);
-
-      await upsertP2PDepositOperation({
-        ...operation,
-        webhookEventId: payload.id,
-        workflowRunId:
-          typeof run === "object" && run !== null && "id" in run
-            ? String((run as { id: string }).id)
-            : undefined,
-        status: "workflow_started",
-        message: "Deposit workflow scheduled",
+        receivedMessage: "Alchemy webhook received and verified",
+        workflowMessage: "Deposit workflow scheduled",
+        failedMessage: "Failed to schedule deposit workflow",
       });
 
       scheduled += 1;
     } catch (error) {
       failed += 1;
       const message = error instanceof Error ? error.message : String(error);
-
-      if (operation) {
-        await upsertP2PDepositOperation({
-          ...operation,
-          webhookEventId: payload.id,
-          status: "failed",
-          lastError: message,
-          message: "Failed to schedule deposit workflow",
-        });
-      }
-
       console.error("Failed to process Base deposit webhook log", {
         error: message,
         webhookEventId: payload.id,
