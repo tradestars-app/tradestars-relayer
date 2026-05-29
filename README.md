@@ -16,13 +16,17 @@ It is intentionally separate from the main product app. The relayer owns deposit
 
 ## P2P Withdrawal Flow
 
-1. The product app records the user's encrypted payout details in the shared app store.
+> **Offramp v2 (user-driven).** The relayer's only on-chain job is a one-time
+> allocation; the end user drives the SELL from the widget. See
+> `payment-integrators/docs/OFFRAMP-V2.md`.
+
+1. The product app records the user's **Base address** on the withdrawal in the shared app store (the payout address is entered + encrypted later, client-side in the widget — never stored server-side).
 2. The user signs the Solana `withdraw_request` transaction.
 3. The Solana program burns `tUSDC` and emits `WithdrawRequested`.
 4. Helius sends raw Solana transaction logs to `POST /api/webhooks/p2p-withdrawals`.
-5. The relayer verifies `X-Alchemy-Signature`, decodes the Anchor event, and starts a Workflow run.
+5. The relayer verifies the webhook auth, decodes the Anchor event, and starts a Workflow run.
 6. The workflow reads the matching app withdrawal record by signature or `(wallet, nonce)`.
-7. The workflow calls `placeSellOrderForBurn`, waits for merchant acceptance, encrypts the user's payout details for the merchant, calls `deliverOfframpUpi`, and reconciles terminal Base statuses.
+7. The workflow calls **`allocateOfframp(baseAddress, amount, burnTx, solanaUserPubkey)`** on the integrator — moving vault USDC into the user's per-user proxy — and stops. The **user** then places the SELL, delivers the encrypted UPI, and retries from the widget; the relayer no longer places orders, polls, encrypts payout details, or reconciles.
 
 ## Security Model
 
@@ -33,8 +37,8 @@ It is intentionally separate from the main product app. The relayer owns deposit
 - Only the configured Solana `minting_authority` can call `deposit_collateral`.
 - Solana replay markers keyed by `(base_tx_hash, log_index)` prevent duplicate minting.
 - Operation logs are for support and observability only, not correctness.
-- The off-ramp relayer key stays in this service; the product app never receives it and does not expose off-ramp execution APIs.
-- P2P payout addresses are encrypted at rest in the app store and decrypted only by the relayer when a matching burn event is observed.
+- The off-ramp relayer key stays in this service; it can only call `allocateOfframp` (it can no longer place or settle SELL orders).
+- P2P payout addresses are entered + encrypted **client-side in the widget** against the assigned merchant's key — they are no longer stored server-side or handled by the relayer (offramp v2).
 
 ## Admin API
 
@@ -91,9 +95,9 @@ To schedule the deployed workflow:
 pnpm replay:p2p-withdrawal --env=.env.prod --relayer-url=https://<production-relayer> --signature=<solana_tx> --user=<solana_wallet> --amount=<raw_usdc> --nonce=<withdraw_nonce> --execute --confirm-mainnet
 ```
 
-Replay is safe to retry: the workflow first checks `solanaBurnToOrderId` on the
-TradeStars integrator and resumes an existing Base order when one already
-exists.
+Replay is safe to retry: the workflow first checks `burnToAllocation` on the
+TradeStars integrator and resumes the existing allocation when one already
+exists (idempotent — it never double-allocates).
 
 ## Environment
 
@@ -106,12 +110,6 @@ exists.
 - `BASE_P2P_DEPOSIT_FINALITY` optional, `safe` or `receipt`, defaults to `safe`
 - `BASE_SAFE_RECHECK_DELAYS_SECONDS` optional, defaults to steady short polling for roughly 5 minutes
 - `HELIUS_WEBHOOK_SECRET`
-- `P2P_WITHDRAWAL_ENCRYPTION_KEY`
-- `P2P_OFFRAMP_RELAY_ADDRESS`
-- `P2P_OFFRAMP_RELAY_PUBLIC_KEY`
-- `P2P_OFFRAMP_RELAY_PRIVATE_KEY`
-- `P2P_OFFRAMP_MERCHANT_POLL_DELAYS_SECONDS` optional
-- `P2P_OFFRAMP_TERMINAL_POLL_DELAYS_SECONDS` optional
 - `SOLANA_MINTING_AUTHORITY_KEYPAIR`
 - `SOLANA_RPC`
 - `SOLANA_MINT_COMPUTE_UNIT_PRICE_MICRO_LAMPORTS` optional, defaults to `10000`

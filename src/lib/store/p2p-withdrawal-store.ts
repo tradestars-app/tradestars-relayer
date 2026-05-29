@@ -9,6 +9,11 @@ export type WithdrawalPayoutCurrency = "INR" | "BRL" | "IDR";
 export type WithdrawalStatus =
   | "submitted"
   | "pending_relayer"
+  // Offramp v2 (allocate-only): the relayer moves vault USDC into the user's
+  // proxy, then the user drives the SELL from the widget.
+  | "allocating"
+  | "allocated"
+  // Legacy (relayer-driven offramp v1) — retained for back-compat with old records.
   | "placing_order"
   | "waiting_for_merchant"
   | "delivering_payout_details"
@@ -30,10 +35,13 @@ export type WithdrawalRecord = {
   fiatAmountRaw?: string;
   circleId?: number;
   preferredPaymentChannelConfigId?: string;
+  /** User's Base EOA (proxy owner) — the allocation target. Product app must set it. */
+  baseAddress?: string;
+  /** Offramp v2 allocation id from the integrator's OfframpAllocated event. */
+  baseAllocationId?: string;
+  /** Tx hash of the allocateOfframp call. */
+  baseAllocationTx?: string;
   baseOrderId?: string;
-  basePlaceTx?: string;
-  baseDeliverTx?: string;
-  baseReconcileTx?: string;
   failureReason?: string;
   claimedAt?: number;
   amountRaw: number;
@@ -48,10 +56,10 @@ export type WithdrawalUpdate = Partial<
   Pick<
     WithdrawalRecord,
     | "status"
+    | "baseAddress"
+    | "baseAllocationId"
+    | "baseAllocationTx"
     | "baseOrderId"
-    | "basePlaceTx"
-    | "baseDeliverTx"
-    | "baseReconcileTx"
     | "failureReason"
     | "claimedAt"
   >

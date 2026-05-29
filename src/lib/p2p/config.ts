@@ -53,6 +53,10 @@ export function getP2PDepositWorkflowConfig() {
 }
 
 export function getP2PWithdrawalWorkflowConfig() {
+  // Offramp v2 (allocate-only): the relayer only needs to call allocateOfframp.
+  // The payout-encryption relay keys (P2P_OFFRAMP_RELAY_*) and the merchant /
+  // terminal poll delays are gone — the user drives place / deliver / retry
+  // from the widget and encrypts their payout address client-side.
   return {
     baseRpcUrl: requireEnv("BASE_RPC_URL", process.env.BASE_RPC_URL),
     integratorAddress: requireEnv(
@@ -67,32 +71,6 @@ export function getP2PWithdrawalWorkflowConfig() {
       "BASE_OFFRAMP_RELAYER_PRIVATE_KEY",
       process.env.BASE_OFFRAMP_RELAYER_PRIVATE_KEY,
     ) as `0x${string}`,
-    p2pRelayAddress: requireEnv(
-      "P2P_OFFRAMP_RELAY_ADDRESS",
-      process.env.P2P_OFFRAMP_RELAY_ADDRESS,
-    ) as `0x${string}`,
-    p2pRelayPublicKey: requireEnv(
-      "P2P_OFFRAMP_RELAY_PUBLIC_KEY",
-      process.env.P2P_OFFRAMP_RELAY_PUBLIC_KEY,
-    ),
-    p2pRelayPrivateKey: requireEnv(
-      "P2P_OFFRAMP_RELAY_PRIVATE_KEY",
-      process.env.P2P_OFFRAMP_RELAY_PRIVATE_KEY,
-    ) as `0x${string}`,
-    merchantPollDelaysSeconds: (
-      process.env.P2P_OFFRAMP_MERCHANT_POLL_DELAYS_SECONDS ||
-      "15,30,60,120,240,300"
-    )
-      .split(",")
-      .map((value) => Number(value.trim()))
-      .filter((value) => Number.isFinite(value) && value >= 0),
-    terminalPollDelaysSeconds: (
-      process.env.P2P_OFFRAMP_TERMINAL_POLL_DELAYS_SECONDS ||
-      "30,60,120,240,300,300,300,300"
-    )
-      .split(",")
-      .map((value) => Number(value.trim()))
-      .filter((value) => Number.isFinite(value) && value >= 0),
   };
 }
 
