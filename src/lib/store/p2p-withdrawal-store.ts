@@ -30,7 +30,6 @@ export type WithdrawalRecord = {
   destinationWallet?: string;
   payoutMethod: WithdrawalPayoutMethod;
   payoutCurrency?: WithdrawalPayoutCurrency;
-  payoutAddressEncrypted?: string;
   payoutAddressPreview?: string;
   fiatAmountRaw?: string;
   circleId?: number;

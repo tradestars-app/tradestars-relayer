@@ -48,8 +48,8 @@ function validateWithdrawalRecord(
   }
   // Offramp v2 allocates to the user's Base proxy, so the product app must
   // record the user's Base EOA on the withdrawal. The user enters their payout
-  // address in the widget (and encrypts it client-side), so we no longer need
-  // payoutCurrency / payoutAddressEncrypted here.
+  // address in the widget and encrypts it client-side, so the relayer never
+  // handles or stores it (no payout-encryption/decryption on the relayer).
   if (!record.baseAddress) {
     throw new FatalError(
       "Withdrawal record missing baseAddress — the product app must record the " +
