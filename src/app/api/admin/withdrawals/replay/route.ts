@@ -105,8 +105,8 @@ export async function POST(request: Request): Promise<Response> {
       },
       existingWithdrawal: {
         status: record.status,
-        baseOrderId: record.baseOrderId,
-        basePlaceTx: record.basePlaceTx,
+        baseAllocationId: record.baseAllocationId,
+        baseAllocationTx: record.baseAllocationTx,
         failureReason: record.failureReason,
         updatedAt: record.updatedAt,
       },

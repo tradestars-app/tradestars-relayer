@@ -2,13 +2,13 @@ import { FatalError, sleep } from "workflow";
 import type { P2POfframpConfig } from "@/lib/p2p/offramp";
 import type { WithdrawalRecord } from "@/lib/store/p2p-withdrawal-store";
 
-const P2P_ORDER_STATUS = {
-  placed: 0,
-  accepted: 1,
-  paid: 2,
-  completed: 3,
-  cancelled: 4,
-} as const;
+/**
+ * Offramp v2: the relayer's only job is a one-time on-chain allocation
+ * (`allocateOfframp`) that moves vault USDC into the user's per-user proxy.
+ * The end user drives the SELL (place / deliver UPI / retry) from the widget,
+ * so this workflow no longer places orders, polls merchant/terminal status,
+ * encrypts payout addresses, or reconciles. See OFFRAMP-V2.md.
+ */
 
 const WITHDRAWAL_RECORD_LOOKUP_DELAYS_SECONDS = [1, 2, 3, 5, 8, 13] as const;
 
@@ -27,16 +27,13 @@ async function getOfframpConfig(): Promise<P2POfframpConfig> {
     integratorAddress: config.integratorAddress,
     diamondAddress: config.diamondAddress,
     relayerPrivateKey: config.relayerPrivateKey,
-    p2pRelayAddress: config.p2pRelayAddress,
-    p2pRelayPublicKey: config.p2pRelayPublicKey,
-    p2pRelayPrivateKey: config.p2pRelayPrivateKey,
   };
 }
 
 function validateWithdrawalRecord(
   record: WithdrawalRecord,
   input: P2PWithdrawalWorkflowInput,
-): asserts record is WithdrawalRecord {
+): void {
   if (record.payoutMethod !== "p2p") {
     throw new FatalError("Withdrawal is not a P2P cashout");
   }
@@ -49,11 +46,15 @@ function validateWithdrawalRecord(
   if (record.nonce !== input.nonce) {
     throw new FatalError("Withdrawal nonce does not match Solana event");
   }
-  if (!record.payoutCurrency) {
-    throw new FatalError("P2P withdrawal is missing payout currency");
-  }
-  if (!record.payoutAddressEncrypted) {
-    throw new FatalError("P2P withdrawal is missing encrypted payout address");
+  // Offramp v2 allocates to the user's Base proxy, so the product app must
+  // record the user's Base EOA on the withdrawal. The user enters their payout
+  // address in the widget and encrypts it client-side, so the relayer never
+  // handles or stores it (no payout-encryption/decryption on the relayer).
+  if (!record.baseAddress) {
+    throw new FatalError(
+      "Withdrawal record missing baseAddress — the product app must record the " +
+        "user's Base address so the relayer can allocate to their proxy",
+    );
   }
 }
 
@@ -86,126 +87,44 @@ async function failWithdrawal(record: WithdrawalRecord, reason: string) {
   });
 }
 
-async function markStatus(
-  record: WithdrawalRecord,
-  update: Partial<Pick<WithdrawalRecord, "status" | "failureReason">>,
-) {
-  "use step";
-
-  const { updateP2PWithdrawal } = await import(
-    "@/lib/store/p2p-withdrawal-store"
-  );
-  return updateP2PWithdrawal(record, update);
-}
-
-async function ensureBaseOrder(
+async function allocate(
   record: WithdrawalRecord,
   input: P2PWithdrawalWorkflowInput,
 ) {
   "use step";
 
-  const {
-    getOrderIdForBurn,
-    placeSellOrderForBurn,
-    solanaSignatureToBurnBytes32,
-  } = await import("@/lib/p2p/offramp");
+  const { allocateOfframp, getAllocationIdForBurn, solanaSignatureToBurnBytes32 } =
+    await import("@/lib/p2p/offramp");
   const { updateP2PWithdrawal } = await import(
     "@/lib/store/p2p-withdrawal-store"
   );
   const config = await getOfframpConfig();
-  const existingOrderId =
-    record.baseOrderId ??
-    (await getOrderIdForBurn({
-      config,
-      burnTx: solanaSignatureToBurnBytes32(input.signature),
-    }));
-  if (existingOrderId) {
+
+  // Idempotent: if this burn was already allocated on-chain (or recorded),
+  // resume that allocation instead of allocating again.
+  const burnTx = solanaSignatureToBurnBytes32(input.signature);
+  const existing =
+    record.baseAllocationId ?? (await getAllocationIdForBurn({ config, burnTx }));
+  if (existing) {
     return updateP2PWithdrawal(record, {
-      status: "waiting_for_merchant",
-      baseOrderId: existingOrderId,
-      claimedAt: record.claimedAt ?? Date.now(),
+      status: "allocated",
+      baseAllocationId: existing,
     });
   }
 
-  const placing = await updateP2PWithdrawal(record, {
-    status: "placing_order",
-    claimedAt: record.claimedAt ?? Date.now(),
-  });
-  const placed = await placeSellOrderForBurn({
+  const allocating = await updateP2PWithdrawal(record, { status: "allocating" });
+  const result = await allocateOfframp({
     config,
-    signature: input.signature,
-    user: input.user,
+    baseAddress: allocating.baseAddress as `0x${string}`,
     amount: input.amount,
-    currency: placing.payoutCurrency!,
-    fiatAmount: placing.fiatAmountRaw ?? "0",
-    circleId: placing.circleId ?? 1,
-    preferredPaymentChannelConfigId:
-      placing.preferredPaymentChannelConfigId ?? "0",
+    signature: input.signature,
+    solanaUser: input.user,
   });
 
-  return updateP2PWithdrawal(placing, {
-    status: "waiting_for_merchant",
-    baseOrderId: placed.orderId,
-    basePlaceTx: placed.txHash,
-  });
-}
-
-async function readOrderStatus(orderId: string) {
-  "use step";
-
-  const { getP2POrder } = await import("@/lib/p2p/offramp");
-  return getP2POrder({
-    config: await getOfframpConfig(),
-    orderId,
-  });
-}
-
-async function deliverPayoutDetails(record: WithdrawalRecord, merchantPubkey: string) {
-  "use step";
-
-  const { decryptP2PPayoutAddress } = await import(
-    "@/lib/p2p/payout-encryption"
-  );
-  const {
-    deliverOfframpUpi,
-    encryptPayoutForMerchant,
-  } = await import("@/lib/p2p/offramp");
-  const { updateP2PWithdrawal } = await import(
-    "@/lib/store/p2p-withdrawal-store"
-  );
-  const config = await getOfframpConfig();
-  const payoutAddress = decryptP2PPayoutAddress(record.payoutAddressEncrypted!);
-  const encryptedPayoutAddress = await encryptPayoutForMerchant({
-    config,
-    paymentAddress: payoutAddress,
-    merchantPublicKey: merchantPubkey,
-  });
-  const txHash = await deliverOfframpUpi({
-    config,
-    orderId: record.baseOrderId!,
-    encryptedPayoutAddress,
-  });
-
-  return updateP2PWithdrawal(record, {
-    status: "waiting_for_fiat_payment",
-    baseDeliverTx: txHash,
-  });
-}
-
-async function reconcileTerminal(record: WithdrawalRecord, status: number) {
-  "use step";
-
-  const { reconcileOfframp } = await import("@/lib/p2p/offramp");
-  const { updateP2PWithdrawal } = await import(
-    "@/lib/store/p2p-withdrawal-store"
-  );
-  const txHash = await reconcileOfframp({
-    config: await getOfframpConfig(),
-    orderId: record.baseOrderId!,
-  });
-  return updateP2PWithdrawal(record, {
-    status: status === P2P_ORDER_STATUS.completed ? "paid" : "cancelled",
-    baseReconcileTx: txHash,
+  return updateP2PWithdrawal(allocating, {
+    status: "allocated",
+    baseAllocationId: result.allocationId,
+    baseAllocationTx: result.txHash,
   });
 }
 
@@ -222,60 +141,14 @@ export async function processP2PWithdrawal(input: P2PWithdrawalWorkflowInput) {
     throw new FatalError("No matching P2P withdrawal record found");
   }
 
-  if (record.status === "paid" || record.status === "cancelled") {
+  // Already allocated → nothing more for the relayer to do; the user drives
+  // the rest from the widget.
+  if (record.status === "allocated") {
     return record;
   }
 
   try {
-    record = await ensureBaseOrder(record, input);
-
-    const { getP2PWithdrawalWorkflowConfig } = await import(
-      "@/lib/p2p/config"
-    );
-    const { merchantPollDelaysSeconds, terminalPollDelaysSeconds } =
-      getP2PWithdrawalWorkflowConfig();
-
-    let order = await readOrderStatus(record.baseOrderId!);
-    if (order.status === P2P_ORDER_STATUS.cancelled) {
-      return reconcileTerminal(record, order.status);
-    }
-
-    for (const delaySeconds of merchantPollDelaysSeconds) {
-      if (order.status === P2P_ORDER_STATUS.accepted) break;
-      await sleep(`${delaySeconds}s`);
-      order = await readOrderStatus(record.baseOrderId!);
-      if (order.status === P2P_ORDER_STATUS.cancelled) {
-        return reconcileTerminal(record, order.status);
-      }
-    }
-
-    if (order.status !== P2P_ORDER_STATUS.accepted) {
-      throw new Error("Merchant did not accept the P2P sell order in time");
-    }
-
-    if (!record.baseDeliverTx) {
-      if (!order.pubkey) {
-        throw new Error("Accepted order is missing merchant public key");
-      }
-      record = await markStatus(record, {
-        status: "delivering_payout_details",
-      });
-      record = await deliverPayoutDetails(record, order.pubkey);
-    }
-
-    order = await readOrderStatus(record.baseOrderId!);
-    for (const delaySeconds of terminalPollDelaysSeconds) {
-      if (
-        order.status === P2P_ORDER_STATUS.completed ||
-        order.status === P2P_ORDER_STATUS.cancelled
-      ) {
-        return reconcileTerminal(record, order.status);
-      }
-      await sleep(`${delaySeconds}s`);
-      order = await readOrderStatus(record.baseOrderId!);
-    }
-
-    throw new Error("P2P sell order did not reach a terminal status in time");
+    return await allocate(record, input);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await failWithdrawal(record, message);
