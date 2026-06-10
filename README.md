@@ -16,8 +16,10 @@ It is intentionally separate from the main product app. The relayer owns deposit
 
 ## P2P Withdrawal Flow
 
-> **Offramp v2 (user-driven).** The relayer's only on-chain job is a one-time
-> allocation; the end user drives the SELL from the widget. See
+> **Offramp (voucher-attested, single user tx).** The relayer is a pure
+> ATTESTER: it signs an EIP-712 `OfframpVoucher` off-chain and sends **no
+> Base transaction**. The user's one Base tx redeems the voucher (vault →
+> their proxy) and places the SELL atomically. See
 > `payment-integrators/docs/OFFRAMP-V2.md`.
 
 1. The product app records the user's **Base address** on the withdrawal in the shared app store (the payout address is entered + encrypted later, client-side in the widget — never stored server-side).
@@ -26,7 +28,7 @@ It is intentionally separate from the main product app. The relayer owns deposit
 4. Helius sends raw Solana transaction logs to `POST /api/webhooks/p2p-withdrawals`.
 5. The relayer verifies the webhook auth, decodes the Anchor event, and starts a Workflow run.
 6. The workflow reads the matching app withdrawal record by signature or `(wallet, nonce)`.
-7. The workflow calls **`allocateOfframp(baseAddress, amount, burnTx, solanaUserPubkey)`** on the integrator — moving vault USDC into the user's per-user proxy — and stops. The **user** then places the SELL, delivers the encrypted UPI, and retries from the widget; the relayer no longer places orders, polls, encrypts payout details, or reconciles.
+7. The workflow **signs `OfframpVoucher(burnTx, solanaUserPubkey, baseAddress, amount, deadline)`** with the attester key and persists `{voucher, voucherSignature}` on the withdrawal record (status `signed`) — and stops. The product app hands the voucher to the widget; the **user's single Base tx** (`userRedeemAndStartOfframp`) verifies it, releases vault USDC into their own proxy, and places the SELL. Deliver-UPI / retry stay user-driven; the relayer never places orders, polls, encrypts payout details, reconciles, or transacts.
 
 ## Security Model
 
@@ -37,8 +39,8 @@ It is intentionally separate from the main product app. The relayer owns deposit
 - Only the configured Solana `minting_authority` can call `deposit_collateral`.
 - Solana replay markers keyed by `(base_tx_hash, log_index)` prevent duplicate minting.
 - Operation logs are for support and observability only, not correctness.
-- The off-ramp relayer key stays in this service; it can only call `allocateOfframp` (it can no longer place or settle SELL orders).
-- P2P payout addresses are entered + encrypted **client-side in the widget** against the assigned merchant's key — they are no longer stored server-side or handled by the relayer (offramp v2).
+- The off-ramp attester key stays in this service and only **signs vouchers off-chain** — it holds no gas, sends no transactions, and cannot move funds itself. Vault USDC moves only when the named user redeems a voucher on-chain (single-use per burn, deadline-bounded, user-bound).
+- P2P payout addresses are entered + encrypted **client-side in the widget** against the assigned merchant's key — they are never stored server-side or handled by the relayer.
 
 ## Admin API
 
@@ -96,8 +98,10 @@ pnpm replay:p2p-withdrawal --env=.env.prod --relayer-url=https://<production-rel
 ```
 
 Replay is safe to retry: the workflow first checks `burnToAllocation` on the
-TradeStars integrator and resumes the existing allocation when one already
-exists (idempotent — it never double-allocates).
+TradeStars integrator (non-zero ⇒ the user already redeemed → status
+`redeemed`), keeps a live unexpired voucher as-is, and re-signs an expired one
+(same burn, fresh deadline — the on-chain burn dedupe makes double redemption
+impossible regardless).
 
 ## Environment
 
@@ -106,7 +110,9 @@ exists (idempotent — it never double-allocates).
 - `BASE_RPC_URL`
 - `BASE_P2P_INTEGRATOR_ADDRESS`
 - `BASE_P2P_DIAMOND_ADDRESS`
-- `BASE_OFFRAMP_RELAYER_PRIVATE_KEY`
+- `BASE_OFFRAMP_RELAYER_PRIVATE_KEY` — the attester key; signs vouchers off-chain only, needs no ETH
+- `BASE_CHAIN_ID` optional, EIP-712 voucher domain chain id, defaults to `84532` (Base Sepolia)
+- `P2P_VOUCHER_TTL_SECONDS` optional, voucher validity window, defaults to `86400` (24h)
 - `BASE_P2P_DEPOSIT_FINALITY` optional, `safe` or `receipt`, defaults to `safe`
 - `BASE_SAFE_RECHECK_DELAYS_SECONDS` optional, defaults to steady short polling for roughly 5 minutes
 - `HELIUS_WEBHOOK_SECRET`

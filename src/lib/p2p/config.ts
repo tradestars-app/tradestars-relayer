@@ -53,12 +53,16 @@ export function getP2PDepositWorkflowConfig() {
 }
 
 export function getP2PWithdrawalWorkflowConfig() {
-  // Offramp v2 (allocate-only): the relayer only needs to call allocateOfframp.
-  // The payout-encryption relay keys (P2P_OFFRAMP_RELAY_*) and the merchant /
-  // terminal poll delays are gone — the user drives place / deliver / retry
-  // from the widget and encrypts their payout address client-side.
+  // Offramp (voucher-attested): the relayer only SIGNS an EIP-712 voucher
+  // off-chain — it sends no Base transaction. BASE_RPC_URL is kept solely for
+  // the burnToAllocation redeemed-check read; the signing key needs no gas.
+  const voucherTtlSeconds = Number(process.env.P2P_VOUCHER_TTL_SECONDS || 86400);
+  if (!Number.isFinite(voucherTtlSeconds) || voucherTtlSeconds <= 0) {
+    throw new Error("P2P_VOUCHER_TTL_SECONDS must be a positive number");
+  }
   return {
     baseRpcUrl: requireEnv("BASE_RPC_URL", process.env.BASE_RPC_URL),
+    chainId: Number(process.env.BASE_CHAIN_ID || 84532),
     integratorAddress: requireEnv(
       "BASE_P2P_INTEGRATOR_ADDRESS",
       process.env.BASE_P2P_INTEGRATOR_ADDRESS,
@@ -71,6 +75,7 @@ export function getP2PWithdrawalWorkflowConfig() {
       "BASE_OFFRAMP_RELAYER_PRIVATE_KEY",
       process.env.BASE_OFFRAMP_RELAYER_PRIVATE_KEY,
     ) as `0x${string}`,
+    voucherTtlSeconds,
   };
 }
 

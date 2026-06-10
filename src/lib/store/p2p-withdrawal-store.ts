@@ -9,8 +9,14 @@ export type WithdrawalPayoutCurrency = "INR" | "BRL" | "IDR";
 export type WithdrawalStatus =
   | "submitted"
   | "pending_relayer"
-  // Offramp v2 (allocate-only): the relayer moves vault USDC into the user's
-  // proxy, then the user drives the SELL from the widget.
+  // Offramp (voucher-attested): the relayer signs an EIP-712 voucher
+  // off-chain; the user's single Base tx redeems it (vault → their proxy +
+  // SELL placed atomically). `signed` = voucher available on the record for
+  // the product app / widget; `redeemed` = burn observed as consumed on-chain.
+  | "signing"
+  | "signed"
+  | "redeemed"
+  // Legacy (allocate-only era) — retained for back-compat with old records.
   | "allocating"
   | "allocated"
   // Legacy (relayer-driven offramp v1) — retained for back-compat with old records.
@@ -34,11 +40,25 @@ export type WithdrawalRecord = {
   fiatAmountRaw?: string;
   circleId?: number;
   preferredPaymentChannelConfigId?: string;
-  /** User's Base EOA (proxy owner) — the allocation target. Product app must set it. */
+  /** User's Base EOA (proxy owner) — becomes `voucher.user`, the only wallet
+   *  that can redeem. Product app must set it. */
   baseAddress?: string;
-  /** Offramp v2 allocation id from the integrator's OfframpAllocated event. */
+  /** The signed EIP-712 OfframpVoucher (all uint256 fields as decimal
+   *  strings). The product app reads this off the record and hands it to the
+   *  widget for `userRedeemAndStartOfframp`. */
+  voucher?: {
+    solanaBurnTx: string;
+    solanaUserPubkey: string;
+    user: string;
+    amount: string;
+    deadline: string;
+  };
+  /** Attester signature over `voucher` (EIP-712). */
+  voucherSignature?: string;
+  /** Allocation id once the voucher is observed redeemed on-chain (from the
+   *  integrator's burnToAllocation map). Legacy records: the allocateOfframp id. */
   baseAllocationId?: string;
-  /** Tx hash of the allocateOfframp call. */
+  /** Legacy (allocate-only era): tx hash of the allocateOfframp call. */
   baseAllocationTx?: string;
   baseOrderId?: string;
   failureReason?: string;
@@ -56,6 +76,8 @@ export type WithdrawalUpdate = Partial<
     WithdrawalRecord,
     | "status"
     | "baseAddress"
+    | "voucher"
+    | "voucherSignature"
     | "baseAllocationId"
     | "baseAllocationTx"
     | "baseOrderId"
